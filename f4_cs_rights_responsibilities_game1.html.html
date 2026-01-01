@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>公民權利與義務：深度教學版</title>
+    <style>
+        :root {
+            --primary: #2c3e50; --success: #27ae60; --danger: #e74c3c;
+            --warning: #f1c40f; --info: #3498db; --bg: #f4f7f6;
+        }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; display: flex; overflow: hidden; height: 100vh; }
+        
+        /* 側邊欄 */
+        #sidebar { 
+            width: 320px; background: var(--primary); color: white; padding: 15px; 
+            display: flex; flex-direction: column; box-shadow: 3px 0 15px rgba(0,0,0,0.3); 
+            z-index: 110; 
+        }
+        .team-card { background: rgba(255,255,255,0.1); padding: 10px; margin-bottom: 8px; border-radius: 10px; border-left: 6px solid transparent; transition: 0.3s; }
+        .team-card.active { border-left-color: var(--warning); background: rgba(255,255,255,0.25); box-shadow: 0 0 15px var(--warning); }
+        .score-row { display: flex; justify-content: space-between; align-items: center; }
+        .score-num { font-size: 24px; color: var(--warning); font-weight: bold; }
+        .manual-btn { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+        /* 棋盤 */
+        #main-content { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; align-items: center; position: relative; }
+        #board { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; background: #bdc3c7; padding: 10px; border-radius: 15px; width: 100%; max-width: 950px; }
+        .cell { height: 75px; background: white; border-radius: 8px; position: relative; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #95a5a6; }
+        .cell.event-up { background: #e8f5e9; border: 2px solid var(--success); }
+        .cell.event-down { background: #ffebee; border: 2px solid var(--danger); }
+        .cell.completed { filter: grayscale(1); opacity: 0.4; }
+
+        /* 棋子：帶數字 */
+        .pawn-container { position: absolute; bottom: 5px; width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+        .pawn { 
+            width: 22px; height: 22px; border-radius: 50%; border: 2px solid white; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; 
+            justify-content: center; font-size: 14px; color: white; font-weight: 900;
+        }
+
+        /* 彈窗 */
+        #overlay { display: none; position: fixed; top: 0; left: 320px; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 100; }
+        #modal { 
+            display: none; position: fixed; top: 50%; left: calc(50% + 160px); 
+            transform: translate(-50%, -50%); width: 85%; max-width: 850px; 
+            background: white; padding: 35px; border-radius: 30px; z-index: 105; 
+            text-align: center; box-shadow: 0 10px 50px rgba(0,0,0,0.6); 
+        }
+        #m-desc { font-size: 38px; line-height: 1.3; color: #222; font-weight: 900; margin-bottom: 20px; }
+        .ans-box { 
+            display: none; margin: 15px 0; padding: 20px; 
+            background: #fff9c4; border: 4px dashed #fbc02d; border-radius: 15px; 
+        }
+        .ans-text { font-size: 32px; color: #d32f2f; font-weight: bold; display: block; margin-bottom: 10px; }
+        .logic-text { font-size: 24px; color: #2c3e50; line-height: 1.4; display: block; background: white; padding: 10px; border-radius: 10px; }
+
+        /* 遊戲總結面板 */
+        #summary-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:white; z-index: 200; overflow-y: auto; padding: 40px; }
+        .summary-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .summary-table th, .summary-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        .summary-table th { background: var(--primary); color: white; }
+        
+        .action-btn { padding: 15px; width: 100%; border-radius: 12px; border: none; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        #dice-box { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 15px; text-align: center; margin-top: auto; }
+        #dice { font-size: 50px; background: white; width: 80px; height: 80px; line-height: 80px; margin: 10px auto; border-radius: 10px; color: #333; cursor: pointer; font-weight: bold; }
+        .summary-btn { background: var(--info); color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2 style="text-align:center; margin-bottom:10px;">🏆 積分榜</h2>
+    <div id="teams-list"></div>
+    <button class="summary-btn" onclick="showSummary()">📊 遊戲總結 (溫習清單)</button>
+    <div id="dice-box">
+        <p id="turn-txt" style="color:var(--warning); font-weight: bold;">準備開始</p>
+        <div id="dice" onclick="roll()">🎲</div>
+        <p id="roll-status">點擊骰子</p>
+    </div>
+</div>
+
+<div id="main-content">
+    <h1 style="color:var(--primary); margin: 0 0 10px 0;">權利與義務互動挑戰賽</h1>
+    <div id="board"></div>
+</div>
+
+<div id="overlay"></div>
+<div id="modal">
+    <div id="m-desc"></div>
+    <div class="ans-box" id="m-ans">
+        <span class="ans-text" id="m-ans-title"></span>
+        <span class="logic-text" id="m-logic"></span>
+    </div>
+    <button class="action-btn" style="background:var(--warning)" id="btn-show" onclick="showAns()">顯示解說</button>
+    <button class="action-btn" style="background:var(--primary); color:white; display:none;" id="btn-move" onclick="proceed()">執行移動並換組</button>
+</div>
+
+<div id="summary-overlay">
+    <button onclick="document.getElementById('summary-overlay').style.display='none'" style="float:right; padding:10px; background:var(--danger); color:white; border:none; border-radius:5px; cursor:pointer;">關閉總結</button>
+    <h1>📋 課堂事件總結與解說</h1>
+    <table class="summary-table" id="summary-content">
+        <thead>
+            <tr>
+                <th>編號</th>
+                <th>事件內容</th>
+                <th>法律判定</th>
+                <th>解說邏輯</th>
+                <th>結果</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    const teamColors = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22"];
+    let teamPos = [1, 1, 1, 1, 1, 1];
+    let teamScores = [0, 0, 0, 0, 0, 0];
+    let currentTeam = 0;
+    let isMoving = false;
+    let jumpQueued = 0;
+    let eventCount = 0;
+    let completedSquares = new Set();
+
+    const events = {
+        3: { move: 2, desc: "因對公共政策不滿，向申訴專員公署提交正式投訴。", ans: "答案﹕司法權利 (申訴權、提出訴訟)", logic: "判斷：有效行使法定申訴權利。透過合法途徑表達不滿，獲准獎勵前進。" },
+        6: { move: 2, desc: "積極參與區議會的「公眾諮詢會」，發表建設性意見。", ans: "答案﹕義務 (監察政府施政)", logic: "判斷：履行公民義務。積極參與公共事務有助政府改良施政，獲准前進。" },
+        8: { move: 3, desc: "在個人社交媒體上發表對時事的合理批評，言詞謹慎。", ans: "答案﹕政治權利 (言論自由)", logic: "判斷：在合法範圍內享用言論自由。理性的批評受法律保障，獎勵前進。" },
+        11: { move: 2, desc: "在最近的選舉中已登記為選民並完成投票。", ans: "答案﹕政治權利 (選舉權)", logic: "判斷：行使公民神聖的選舉權。參與民主程序是權利的體現，獲准前進。" },
+        13: { move: 2, desc: "作為被告，獲法庭准許保釋並如期出庭應訊。", ans: "答案﹕義務 (遵守法律、尊重公平審訊)", logic: "判斷：履行法律義務。配合司法程序是每位公民的職責，獎勵前進。" },
+        16: { move: 3, desc: "成功獲得一份與你專業技能相關的新工作。", ans: "答案﹕經濟權利 (職業選擇自由)", logic: "判斷：享用勞動及職業選擇權。個人發展受權利保障，獎勵前進。" },
+        18: { move: 2, desc: "與工會成員一起向僱主爭取更好的勞工權益。", ans: "答案﹕政治權利 (組織和參加工會)", logic: "判斷：享用集體談判與結社權利。合法維護僱員權益受保障，獎勵前進。" },
+        20: { move: 2, desc: "向政府提交了一份有創意的城市規劃建議書。", ans: "答案﹕義務 (參與公共事務、積極發表意見)", logic: "判斷：積極履行公民參與義務。為城市發展出謀獻策，獎勵前進。" },
+        23: { move: 3, desc: "決定搬家，從港島遷往新界，並成功辦理了手續。", ans: "答案﹕個人權利 (遷徙自由)", logic: "判斷：享用居所與遷徙自由。公民有權決定自己的居住地，獎勵前進。" },
+        25: { move: 2, desc: "你將閒置的資金存入銀行或進行合法的投資，獲得回報。", ans: "答案﹕經濟權利 (私有財產權)", logic: "判斷：享用財產處置權。合法的經濟活動與財產增值受保護，獎勵前進。" },
+        27: { move: 2, desc: "成功與伴侶在香港註冊結婚。", ans: "答案﹕個人權利 (婚姻自由)", logic: "判斷：享用婚姻與建立家庭的權利。這是法律賦予的基本個人自由，獎勵前進。" },
+        29: { move: 3, desc: "組織一個興趣小組（例如：行山隊、讀書會）並向政府註冊。", ans: "答案﹕政治權利 (結社自由)", logic: "判斷：享用結社自由。合法的民間組織活動受法律保障，獎勵前進。" },
+        31: { move: 2, desc: "因失業而向社會福利署申請綜合社會保障援助（綜援）。", ans: "答案﹕社會權利 (享有福利)", logic: "判斷：享用社會福利權。政府有責任保障公民的基本生活需要，獎勵前進。" },
+        33: { move: 2, desc: "成功申請並獲得了新特區護照或簽證，準備出國旅遊。", ans: "答案﹕個人權利 (出入境自由)", logic: "判斷：享用出入境權利。持有有效證件自由往返受保障，獎勵前進。" },
+        36: { move: 3, desc: "成功向一間出版社提交你寫的一本小說，要求出版。", ans: "答案﹕文化權利 (出版自由 / 創作自由)", logic: "判斷：享用文化與創作自由。知識產權與創作空間受保護，獎勵前進。" },
+        38: { move: 2, desc: "向記者提供資料，揭發了一宗企業的不當行為。", ans: "答案﹕政治權利 (新聞自由)", logic: "判斷：享用新聞及言論自由。揭發社會不公義是權利的行使，獎勵前進。" },
+        40: { move: 3, desc: "作為香港永久居民，成功參選區議會或立法會。", ans: "答案﹕政治權利 (被選舉權)", logic: "判斷：享用被選舉權。參與管理國家事務是高階權利的體現，獎勵前進。" },
+        43: { move: 2, desc: "在警署錄口供時，主動要求與你的律師會面。", ans: "答案﹕司法權利 (享有辯護及緘默權)", logic: "判斷：享用程序公義。被告人在法律面前有權獲得專業辯護，獎勵前進。" },
+        45: { move: 2, desc: "在涉及法律問題時，成功獲得了一次免費的法律諮詢服務。", ans: "答案﹕司法權利 (法律援助權)", logic: "判斷：享用法律援助權。確保貧富公民在法律面前都能獲得幫助，獎勵前進。" },
+        47: { move: 3, desc: "你成功報讀了香港的大學，行使受教育權利。", ans: "答案﹕文化權利 (學術自由、接受教育權利)", logic: "判斷：享用教育權。個人透過學習提升質素受法律保障，獎勵前進。" },
+        // 後退
+        5: { move: -2, desc: "在颱風或緊急情況下，你無視政府發出的強制撤離令。", ans: "答案﹕沒有遵守法律義務", logic: "解說：違反遵守法律義務。無視緊急安全指令會危害社會與個人，處分後退。" },
+        10: { move: -2, desc: "在公眾集會中，你的路線超出了原先批准的集會範圍。", ans: "答案﹕ 沒有遵守集會自由的限制", logic: "解說：違反權利行使的界限。行使自由不得妨礙公共秩序，處分後退。" },
+        15: { move: -3, desc: "作為公職人員執行職務時，對他人使用暴力或施加殘酷強逼被告認罪。", ans: "答案﹕違反無罪推定", logic: "解說：嚴重違反人權義務。公職人員必須依法執行職務，侵犯人權需處分後退。" },
+        22: { move: -2, desc: "未經法庭授權，執法人員強行進入你家搜查。", ans: "答案﹕違反個人權利 (居住住所自由)", logic: "解說：執法程序失當，侵犯居住自由。這是對基本權利的侵害，處分後退。" },
+        28: { move: -3, desc: "未經同意，非法截取和閱讀他人的私人電郵或訊息。", ans: "答案﹕違反個人權利 (通訊自由)", logic: "解說：違反尊重他人隱私的義務。通訊自由受法律嚴格保護，處分後退。" },
+        35: { move: -2, desc: "在公眾場所故意用危險物品傷害他人。", ans: "答案﹕違反個人權利 (人身安全/人身自由)", logic: "解說：違反不傷害他人的法律義務。危及他人安全是嚴重違法，處分後退。" },
+        42: { move: -3, desc: "協助他人散播虛假「恐怖信息」。", ans: "答案﹕違反維護國家安全義務", logic: "解說：違反國家安全與公共安寧義務。散播虛假危險訊息需負法律責任，處分後退。" },
+        49: { move: -2, desc: "拒絕擔任法庭陪審員。", ans: "答案﹕ 未有履行陪審義務", logic: "解說：逃避公民法定義務。參與司法審判是公民責任，未履行者需處分後退。" }
+    };
+
+    function init() {
+        const b = document.getElementById('board');
+        for (let i = 1; i <= 50; i++) {
+            const c = document.createElement('div');
+            c.className = 'cell'; c.id = `c-${i}`;
+            c.innerHTML = `<span>${i}${i==1?'(起點)':i==50?'(終點)':''}</span>`;
+            if (events[i]) c.classList.add(events[i].move > 0 ? 'event-up' : 'event-down');
+            const pc = document.createElement('div'); pc.className = 'pawn-container'; pc.id = `pc-${i}`;
+            c.appendChild(pc); b.appendChild(c);
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        document.querySelectorAll('.pawn').forEach(p => p.remove());
+        teamPos.forEach((p, i) => {
+            const div = document.createElement('div'); div.className = 'pawn';
+            div.style.backgroundColor = teamColors[i];
+            div.innerText = i + 1; // 顯示組別數字
+            document.getElementById(`pc-${p}`).appendChild(div);
+        });
+        const list = document.getElementById('teams-list');
+        list.innerHTML = teamColors.map((col, i) => `
+            <div class="team-card ${currentTeam === i ? 'active' : ''}" onclick="selectT(${i})">
+                <div class="score-row">
+                    <span>第 ${i+1} 組</span>
+                    <span class="score-num">${teamScores[i]}</span>
+                </div>
+                <div class="score-row" style="margin-top:5px">
+                    <small>位置: ${teamPos[i]}</small>
+                    <button class="manual-btn" onclick="teamScores[${i}]+=10; updateUI(); event.stopPropagation();">答對 +10</button>
+                </div>
+            </div>
+        `).join('');
+        document.getElementById('turn-txt').innerText = `輪到：第 ${currentTeam + 1} 組`;
+    }
+
+    function selectT(i) { if(!isMoving) { currentTeam = i; updateUI(); } }
+
+    async function roll() {
+        if (isMoving) return;
+        isMoving = true; eventCount = 0;
+        const r = Math.floor(Math.random() * 6) + 1;
+        document.getElementById('dice').innerText = r;
+        document.getElementById('roll-status').innerText = `擲出 ${r} 點`;
+        await animateMove(currentTeam, r);
+    }
+
+    async function animateMove(tIdx, steps) {
+        let dir = steps > 0 ? 1 : -1;
+        let s = Math.abs(steps);
+        for (let i = 0; i < s; i++) {
+            let next = teamPos[tIdx] + dir;
+            if (next < 1) next = 1; if (next > 50) next = 50;
+            teamPos[tIdx] = next;
+            updateUI();
+            await new Promise(res => setTimeout(res, 300));
+            if (next === 50 && dir === 1) {
+                teamScores[tIdx] += 50; updateUI();
+                alert(`🎊 第 ${tIdx+1} 組到達終點！自動加 50 分！`);
+                nextTurn(); return;
+            }
+        }
+        checkEvent(teamPos[tIdx]);
+    }
+
+    function checkEvent(pos) {
+        if (events[pos] && !completedSquares.has(pos) && eventCount < 2) {
+            const ev = events[pos];
+            document.getElementById('m-desc').innerText = ev.desc;
+            document.getElementById('m-ans-title').innerText = ev.ans;
+            document.getElementById('m-logic').innerText = ev.logic;
+            document.getElementById('m-ans').style.display = 'none';
+            document.getElementById('btn-show').style.display = 'block';
+            document.getElementById('btn-move').style.display = 'none';
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('modal').style.display = 'block';
+            jumpQueued = ev.move;
+            eventCount++;
+            completedSquares.add(pos);
+            document.getElementById(`c-${pos}`).classList.add('completed');
+        } else {
+            nextTurn();
+        }
+    }
+
+    function showAns() {
+        document.getElementById('m-ans').style.display = 'block';
+        document.getElementById('btn-show').style.display = 'none';
+        document.getElementById('btn-move').style.display = 'block';
+    }
+
+    async function proceed() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('modal').style.display = 'none';
+        if (jumpQueued !== 0) {
+            let j = jumpQueued; jumpQueued = 0;
+            await new Promise(r => setTimeout(r, 600));
+            await animateMove(currentTeam, j);
+        } else {
+            nextTurn();
+        }
+    }
+
+    function nextTurn() {
+        isMoving = false;
+        currentTeam = (currentTeam + 1) % 6;
+        updateUI();
+        document.getElementById('roll-status').innerText = `請第 ${currentTeam + 1} 組擲骰子`;
+    }
+
+    function showSummary() {
+        const body = document.querySelector('#summary-content tbody');
+        body.innerHTML = '';
+        Object.keys(events).sort((a,b)=>a-b).forEach((key, index) => {
+            const ev = events[key];
+            const row = `<tr>
+                <td>${index+1}</td>
+                <td>${ev.desc}</td>
+                <td style="color:var(--danger); font-weight:bold;">${ev.ans}</td>
+                <td>${ev.logic}</td>
+                <td style="color:${ev.move > 0 ? 'green' : 'red'}; font-weight:bold;">${ev.move > 0 ? '前進 '+ev.move : '後退 '+Math.abs(ev.move)} 格</td>
+            </tr>`;
+            body.innerHTML += row;
+        });
+        document.getElementById('summary-overlay').style.display = 'block';
+    }
+
+    init();
+</script>
+</body>
+</html>
